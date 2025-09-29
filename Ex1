@@ -1,0 +1,230 @@
+using System.Text;
+using static System.Console;
+using static MyTools.InputOutputManager;
+
+public static class GameManager
+{
+    public const string startCommand = "start";
+    public const string rulesCommand = "rules";
+    public const string returnCommand = "return";
+    public const string exitCommand = "exit";
+
+    public const string currencyName = "рублей";
+    public static bool ExitRequested { get; set; }
+    public static bool GameStarted { get; set; }
+    static void Main()
+    {
+        SetupEncoding(Encoding.Unicode);
+        CoinGenerator coinGenerator = new CoinGenerator();
+
+        do
+        {
+            GreetMessage();
+
+            while (GameStarted == true)
+            {
+                Clear();
+                coinGenerator.GenerateCoin();
+            };
+
+        } while (ExitRequested == false);
+    }
+
+    static void GreetMessage()
+    {
+        bool answerCorrect = false;
+        do
+        {
+            WriteLineAfterClear("Добро пожаловать в игру \"Генератор монетки.\"! Введите команду для дальнейших действий:" +
+                $"\n{startCommand.ToUpper()}: Начать игру." +
+                $"\n{returnCommand.ToUpper()}: Вернуться в меню (работает только в игре)." +
+                $"\n{rulesCommand.ToUpper()}: Прочесть правила (работает всегда)." +
+                $"\n{exitCommand.ToUpper()}: Выйти из игры (работает всегда).");
+
+            switch (GetUserInput())
+            {
+                case startCommand:
+                    GameStarted = true;
+                    answerCorrect = true;
+                    break;
+
+                case returnCommand:
+                    break;
+
+                case rulesCommand:
+                    break;
+
+                case exitCommand:
+                    answerCorrect = true;
+                    break;
+
+                default:
+                    InvalidCommandMessage();
+                    break;
+            }
+        } while (answerCorrect == false);
+    }
+}
+
+public class CoinGenerator()
+{
+    Random random = new Random();
+
+    public void GenerateCoin()
+    {
+        int[] denomination = Wallet.CoinDenomination;
+        int generatedCoin = denomination[random.Next(0, denomination.Length)];
+        string[] answerVariants = { "Показать баланс", "Добавить на баланс", "Выбросить", "Обнулить баланс" };
+
+        bool answerCorrect = false;
+        do
+        {
+            WriteLine($"Сгенерирована монета номиналом {generatedCoin} {GameManager.currencyName}, что с ней сделать? " +
+                $"(ответ цифрой, {GameManager.returnCommand.ToUpper()} чтобы вернуться.)");
+
+            for (int i = 0; i < answerVariants.Length; i++)
+                WriteLine($"{i + 1}: {answerVariants[i]}.");
+
+            string input = GetUserInput();
+            answerCorrect = DisableAnswerWhenCommandInput(input);
+
+            if (answerCorrect == false)
+                switch (input)
+                {
+                    case "1":
+                        Wallet.CheckBalance();
+                        ReadKeyMessageClearAfter();
+                        break;
+
+                    case "2":
+                        Wallet.AddToBalance(generatedCoin);
+                        answerCorrect = true;
+                        break;
+
+                    case "3":
+                        WriteLine($"Вы выбросили свою монету, номиналом {generatedCoin} {GameManager.currencyName} куда подальше.");
+                        ReadKeyMessageClearAfter();
+                        answerCorrect = true;
+                        break;
+
+                    case "4":
+                        Wallet.ClearBalance();
+                        Wallet.CheckBalance();
+                        ReadKeyMessageClearAfter();
+                        break;
+
+                    default:
+                        InvalidCommandMessage();
+                        break;
+                }
+        } while (answerCorrect == false);
+    }
+}
+
+public static class Wallet
+{
+    public static int[] CoinDenomination
+    {
+        get => [1, 2, 5, 10, 50, 100, 200, 500, 1000, 2000, 5000];
+    }
+    private static int PlayerBalance { get; set; }
+    public static void CheckBalance() => WriteLineAfterClear($"Текущий баланс: {PlayerBalance} {GameManager.currencyName}");
+    public static void AddToBalance(int value) => PlayerBalance += value;
+    public static void ClearBalance() => PlayerBalance = 0;
+}
+
+
+namespace MyTools
+{
+    public static class InputOutputManager
+    {
+        public static string GetUserInput()
+        {
+            Write("> ");
+            string userInput = ReadLine().ToLower();
+
+            switch (userInput)
+            {
+                case GameManager.exitCommand:
+                    WriteLine("Программа завершает свою работу...");
+                    GameManager.ExitRequested = true;
+                    GameManager.GameStarted = false;
+                    ReadKeyMessage();
+                    break;
+
+                case GameManager.rulesCommand:
+                    ShowRules();
+                    break;
+
+                case GameManager.returnCommand:
+                    if (GameManager.GameStarted == true)
+                        GameManager.GameStarted = false;
+                    else
+                        ReturnCommandExeption();
+                    break;
+            }
+
+            return userInput;
+        }
+
+        public static void ReadKeyMessage()
+        {
+            WriteLine("Нажмите любую клавишу, чтобы продолжить...");
+            ReadKey();
+        }
+
+        public static void ReadKeyMessageClearAfter()
+        {
+            ReadKeyMessage();
+            Clear();
+        }
+
+        public static void WriteLineAfterClear(string message)
+        {
+            Clear();
+            WriteLine(message);
+        }
+
+        public static bool DisableAnswerWhenCommandInput(string userInput)
+        {
+            switch (userInput)
+            {
+                case GameManager.returnCommand:
+                    return true;
+
+                case GameManager.rulesCommand:
+                    return true;
+
+                case GameManager.exitCommand:
+                    return true;
+            }
+
+            return false;
+        }
+
+        public static void ShowRules()
+        {
+            WriteLineAfterClear("Правила игры: После запуска, генератор выдаёт вам монеты разного номинала. " +
+                "\nВы можете выкинуть их или забрать себе. Ну вот как бы и всё! (˶°o°||)");
+            ReadKeyMessageClearAfter();
+        }
+
+        public static void SetupEncoding(Encoding encoding)
+        {
+            InputEncoding = encoding;
+            OutputEncoding = encoding;
+        }
+
+        public static void InvalidCommandMessage()
+        {
+            WriteLine("Неверная команда! Попробуйте ещё раз...");
+            ReadKeyMessageClearAfter();
+        }
+
+        public static void ReturnCommandExeption()
+        {
+            WriteLineAfterClear($"Команда {GameManager.returnCommand.ToUpper()} недоступна в меню игры!");
+            ReadKeyMessageClearAfter();
+        }
+    }
+}
