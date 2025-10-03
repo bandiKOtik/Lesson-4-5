@@ -1,0 +1,404 @@
+using System.Text;
+using static System.Console;
+using static MyTools.InputOutputManager;
+
+public static class GameManager
+{
+    public const string startCommand = "start";
+    public const string rulesCommand = "rules";
+    public const string returnCommand = "return";
+    public const string changeClassCommand = "class";
+    public const string exitCommand = "exit";
+
+    public static bool ExitRequested { get; set; }
+    public static bool GameStarted { get; set; }
+
+    static void Main()
+    {
+        SetupEncoding(Encoding.Unicode);
+
+        do
+        {
+            ShowWelcomeMessage();
+        } while (ExitRequested == false);
+    }
+
+    static void ShowWelcomeMessage()
+    {
+        bool answerCorrect = false;
+
+        do
+        {
+            BossBattle bossBattle = new BossBattle();
+            WriteLineAfterClear("Добро пожаловать в игру \"Битва с боссом.\"! Введите команду для дальнейших действий:" +
+                $"\n{startCommand.ToUpper()}: Начать игру." +
+                $"\n{returnCommand.ToUpper()}: Вернуться в меню (работает только в игре)." +
+                $"\n{rulesCommand.ToUpper()}: Прочесть правила (работает всегда)." +
+                $"\n{exitCommand.ToUpper()}: Выйти из игры (работает всегда).");
+
+            switch (GetUserInput())
+            {
+                case startCommand:
+                    GameStarted = true;
+                    bossBattle.StartBattle();
+                    answerCorrect = true;
+                    break;
+
+                case returnCommand:
+                    break;
+
+                case rulesCommand:
+                    break;
+
+                case exitCommand:
+                    answerCorrect = true;
+                    break;
+
+                default:
+                    InvalidCommandMessage();
+                    break;
+            }
+        } while (answerCorrect == false);
+    }
+}
+
+public class BossBattle()
+{
+    Random random = new Random();
+    Character player = new Character("Игрок", 1000, new Skill("Напористая атака", 35, 50, 65), new Skill("Магическая стрела", 150, 100, 30));
+    public Character[] bossList = new Character[]
+    {
+        new Character("Ведьма", 250, new Skill("Цепная молния", 30, 40, 65), new Skill("Подрыв территории", 500, 200, 20)),
+        new Character("Волшебник", 200, new Skill("Ледяные клинки", 40, 40, 75), new Skill("Метель", 150, 20, 25)),
+        new Character("Великан", 800, new Skill("Атака дубиной", 50, 20, 75), new Skill("Бросок булжника", 100, 200, 10)),
+        new Character("Дракон", 1200, new Skill("Фаербол", 100, 40, 70), new Skill("Огонь из пасти", 500, 200, 35))
+    };
+
+    public Character PickRandomBossFromList(Character[] bosses)
+    {
+        return bosses[random.Next(bosses.Length)];
+    }
+
+    public void StartBattle()
+    {
+        Character currentBoss = PickRandomBossFromList(bossList);
+        bool playerTurn = true;
+
+        do
+        {
+            Clear();
+
+            if (currentBoss.Eliminated == false)
+            {
+                WriteLine(currentBoss.ShowStats());
+                WriteLine(player.ShowStats());
+
+                switch (playerTurn)
+                {
+                    case true:
+                        PlayerTurn(currentBoss);
+                        playerTurn = false;
+                        break;
+
+                    case false:
+                        BossTurn(currentBoss);
+                        playerTurn = true;
+                        break;
+                }
+            }
+            else
+            {
+                WriteLine("Босс был побеждён! Вы победили!");
+                ReadKeyMessageClearAfter();
+                GameManager.GameStarted = false;
+            }
+        } while (GameManager.GameStarted == true);
+    }
+
+    private void PlayerTurn(Character currentBoss)
+    {
+        player.Protected = false;
+        string[] answerVariants = { "Атака", "Защита", "Лечение" };
+
+        bool answerCorrect = false;
+        do
+        {
+            WriteLine("Сейчас ваш ход, выберите действие (ответ цифрой).");
+
+            for (int i = 0; i < answerVariants.Length; i++)
+                WriteLine($"{i + 1}: {answerVariants[i]}.");
+
+            string input = GetUserInput();
+            answerCorrect = DisableAnswerWhenCommandInput(input);
+
+            switch (input)
+            {
+                case "1":
+                    GetPlayerAtackSkill(currentBoss);
+                    answerCorrect = true;
+                    break;
+
+                case "2":
+                    WriteLineAfterClear($"В следующем ходу вы получите вдвое меньше урона.");
+                    player.Protected = true;
+                    answerCorrect = true;
+                    break;
+
+                case "3":
+                    int amount = 100;
+                    player.Heal(amount);
+                    WriteLineAfterClear($"Вы вылечили себя на {amount} ОЗ.");
+                    answerCorrect = true;
+                    break;
+
+                default:
+                    InvalidCommandMessage();
+                    break;
+            }
+
+            ReadKeyMessageClearAfter();
+        } while (answerCorrect == false);
+    }
+
+    private void BossTurn(Character currentBoss)
+    {
+        currentBoss.Protected = false;
+        WriteLine($"Сейчас ход босса.");
+        int bossChoice = random.Next(4);
+
+        switch (bossChoice)
+        {
+            case 0:
+                Skill currentSkill = currentBoss.Skills[random.Next(currentBoss.Skills.Length)];
+                WriteLine($"{currentBoss.Name} использует способность {currentSkill.Title}.");
+                currentBoss.DealDamage(player, currentSkill);
+                break;
+            case 1:
+                WriteLine($"{currentBoss.Name} вылечил себя.");
+                currentBoss.Heal(100);
+                break;
+            case 2:
+                WriteLine($"{currentBoss.Name} встаёт в защитную стойку.");
+                currentBoss.Protected = true;
+                break;
+            default:
+                string[] answers =
+                {
+                    "Босс тупит и пропускает ход...",
+                    "Босс спотыкается о камень и нелепо встаёт...",
+                    "Босс пускает слюну и ничего не делает...",
+                    "Босс удивляется вашему ходу и стоит в недоумении...",
+                    "Босс вспоминает шутку и смеётся весь ход...",
+                };
+                WriteLine(answers[random.Next(answers.Length)]);
+                break;
+        }
+
+        ReadKeyMessageClearAfter();
+    }
+
+    private void GetPlayerAtackSkill(Character boss)
+    {
+        bool answerCorrect = false;
+
+        do
+        {
+            Clear();
+            WriteLine("Выберите атаку:" +
+            $"\n1. {player.Skills[0].ShowSkillInfo()}" +
+            $"\n2. {player.Skills[1].ShowSkillInfo()}" +
+            $"\n3. {player.Skills[2].ShowSkillInfo()}");
+
+            if (int.TryParse(GetUserInput(), out int value))
+                if (value > 0 && value <= 3)
+                {
+                    Skill playerSkill = player.Skills[value - 1];
+                    player.DealDamage(boss, playerSkill);
+
+                    answerCorrect = true;
+                }
+                else
+                {
+                    WriteLine("Ответ за пределами допустимых значений. Попробуйте снова.");
+                    ReadKeyMessage();
+                }
+
+            else
+                InvalidCommandMessage();
+
+        } while (answerCorrect == false);
+    }
+}
+
+public class Character
+{
+    public string Name { get; private set; }
+    public bool Eliminated { get; set; }
+    public int Health { get; private set; } = 1000;
+    public bool Protected { get; set; }
+    public Skill[] Skills { get; private set; }
+
+    public Character(string name, int health, Skill secondSkill, Skill thirdSkill)
+    {
+        Name = name;
+        Health = health;
+        Eliminated = false;
+        Skills = new Skill[3] { new Skill("Слабая атака", 35, 10, 25), secondSkill, thirdSkill };
+    }
+
+    public void DealDamage(Character other, Skill skill)
+    {
+        other.TakeDamage(Name, skill.CalculateDamage());
+    }
+
+    public void TakeDamage(string name, int damage)
+    {
+        Health -= damage;
+        WriteLine($"{Name} получает {damage} урона от персонажа {name}.");
+        Eliminated = CheckLiveStatus();
+    }
+
+    private bool CheckLiveStatus()
+    {
+        if (Health <= 0)
+            return true;
+        else
+            return false;
+    }
+
+    public void Heal(int amount) => Health += amount;
+
+    public string ShowStats()
+    {
+        string protectStatus = Protected ? $"{Name} под защитой" : $"{Name} не защищается";
+        return $"У персонажа {Name}: {Health} ОЗ. {protectStatus}.\n";
+    }
+}
+
+public class Skill
+{
+    Random random = new Random();
+    public string Title { get; private set; }
+    public int MinDamage { get; private set; }
+    public int MaxDamage { get; private set; }
+    public int CritChance { get; private set; }
+
+    public Skill(string title, int averageDamage, int damageRange, int critChance)
+    {
+        Title = title;
+        MinDamage = averageDamage - (damageRange / 2);
+        MaxDamage = averageDamage + (damageRange / 2);
+        CritChance = critChance;
+    }
+
+    public string ShowSkillInfo()
+    {
+        return $"{Title} ({MinDamage}-{MaxDamage} HP, {CritChance} CRIT)";
+    }
+
+    public int CalculateDamage()
+    {
+        const int maxCritValue = 100;
+        int damage = random.Next(MinDamage, MaxDamage + 1);
+
+        if (random.Next(maxCritValue + 1) > maxCritValue - CritChance)
+            return damage * 2;
+        else
+            return damage;
+    }
+}
+
+namespace MyTools
+{
+    public static class InputOutputManager
+    {
+        public static string GetUserInput()
+        {
+            Write("> ");
+            string userInput = ReadLine().ToLower();
+
+            switch (userInput)
+            {
+                case GameManager.exitCommand:
+                    WriteLine("Программа завершает свою работу...");
+                    GameManager.ExitRequested = true;
+                    GameManager.GameStarted = false;
+                    ReadKeyMessage();
+                    break;
+
+                case GameManager.rulesCommand:
+                    ShowRules();
+                    break;
+
+                case GameManager.returnCommand:
+                    if (GameManager.GameStarted == true)
+                        GameManager.GameStarted = false;
+                    else
+                        ReturnCommandExeption();
+                    break;
+            }
+
+            return userInput;
+        }
+
+        public static void ReadKeyMessage()
+        {
+            WriteLine("Нажмите любую клавишу, чтобы продолжить...");
+            ReadKey();
+        }
+
+        public static void ReadKeyMessageClearAfter()
+        {
+            ReadKeyMessage();
+            Clear();
+        }
+
+        public static void WriteLineAfterClear(string message)
+        {
+            Clear();
+            WriteLine(message);
+        }
+
+        public static bool DisableAnswerWhenCommandInput(string userInput)
+        {
+            switch (userInput)
+            {
+                case GameManager.returnCommand:
+                    return true;
+
+                case GameManager.rulesCommand:
+                    return true;
+
+                case GameManager.exitCommand:
+                    return true;
+            }
+
+            return false;
+        }
+
+        public static void ShowRules()
+        {
+            WriteLineAfterClear("После запуска перед вами появится один из четырёх боссов игры. " +
+                "\nВаша задача победить босса.");
+            ReadKeyMessageClearAfter();
+        }
+
+        public static void SetupEncoding(Encoding encoding)
+        {
+            InputEncoding = encoding;
+            OutputEncoding = encoding;
+        }
+
+        public static void InvalidCommandMessage()
+        {
+            WriteLine("Неверная команда! Попробуйте ещё раз...");
+            ReadKey();
+        }
+
+        public static void ReturnCommandExeption()
+        {
+            WriteLineAfterClear($"Команда {GameManager.returnCommand.ToUpper()} недоступна в меню игры!");
+            ReadKeyMessageClearAfter();
+        }
+    }
+}
