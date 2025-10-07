@@ -164,7 +164,7 @@ public class BossBattle()
         };
 
         WriteLine($"Сейчас ход босса.");
-        int bossChoice = random.Next(moveVariants.Count + 1);
+        int bossChoice = random.Next(moveVariants.Count);
 
         switch (moveVariants[bossChoice])
         {
@@ -182,18 +182,6 @@ public class BossBattle()
             case "Лечение":
                 WriteLine($"{currentBoss.Name} встаёт в защитную стойку.");
                 currentBoss.Protected = true;
-                break;
-
-            default:
-                string[] answers =
-                {
-                    "Босс тупит и пропускает ход...",
-                    "Босс спотыкается о камень и нелепо встаёт...",
-                    "Босс пускает слюну и ничего не делает...",
-                    "Босс удивляется вашему ходу и стоит в недоумении...",
-                    "Босс вспоминает шутку и смеётся весь ход...",
-                };
-                WriteLine(answers[random.Next(answers.Length)]);
                 break;
         }
 
