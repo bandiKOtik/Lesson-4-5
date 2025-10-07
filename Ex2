@@ -1,6 +1,6 @@
 using System.Text;
 using static System.Console;
-using static MyTools.InputOutputManager;
+using static MyTools.UserInputHandler;
 
 public static class GameManager
 {
@@ -10,20 +10,17 @@ public static class GameManager
     public const string changeClassCommand = "class";
     public const string exitCommand = "exit";
 
-    public static bool ExitRequested { get; set; }
-    public static bool GameStarted { get; set; }
-
     static void Main()
     {
         SetupEncoding(Encoding.Unicode);
 
         do
         {
-            ShowWelcomeMessage();
+            InitializeGameMenu();
         } while (ExitRequested == false);
     }
 
-    static void ShowWelcomeMessage()
+    static void InitializeGameMenu()
     {
         bool answerCorrect = false;
 
@@ -39,7 +36,6 @@ public static class GameManager
             switch (GetUserInput())
             {
                 case startCommand:
-                    GameStarted = true;
                     bossBattle.StartBattle();
                     answerCorrect = true;
                     break;
@@ -81,6 +77,7 @@ public class BossBattle()
 
     public void StartBattle()
     {
+        ChangeGameStatus(true);
         Character currentBoss = PickRandomBossFromList(bossList);
         bool playerTurn = true;
 
@@ -93,58 +90,56 @@ public class BossBattle()
                 WriteLine(currentBoss.ShowStats());
                 WriteLine(player.ShowStats());
 
-                switch (playerTurn)
-                {
-                    case true:
-                        PlayerTurn(currentBoss);
-                        playerTurn = false;
-                        break;
+                if (playerTurn)
+                    PlayerTurn(currentBoss);
+                else
+                    BossTurn(currentBoss);
 
-                    case false:
-                        BossTurn(currentBoss);
-                        playerTurn = true;
-                        break;
-                }
+                playerTurn = !playerTurn;
             }
             else
             {
                 WriteLine("Босс был побеждён! Вы победили!");
                 ReadKeyMessageClearAfter();
-                GameManager.GameStarted = false;
+                ChangeGameStatus(false);
             }
-        } while (GameManager.GameStarted == true);
+        } while (GameStarted == true);
     }
 
     private void PlayerTurn(Character currentBoss)
     {
         player.Protected = false;
-        string[] answerVariants = { "Атака", "Защита", "Лечение" };
+        Dictionary<int, string> moveVariants = new Dictionary<int, string>()
+        {
+            { 0, "Атака" }, { 1, "Защита" }, { 2, "Лечение" }
+        };
 
         bool answerCorrect = false;
         do
         {
             WriteLine("Сейчас ваш ход, выберите действие (ответ цифрой).");
 
-            for (int i = 0; i < answerVariants.Length; i++)
-                WriteLine($"{i + 1}: {answerVariants[i]}.");
+            for (int i = 0; i < moveVariants.Count; i++)
+                WriteLine($"{i + 1}: {moveVariants[i]}.");
 
             string input = GetUserInput();
+            int.TryParse(input, out int parsedValue);
             answerCorrect = DisableAnswerWhenCommandInput(input);
 
-            switch (input)
+            switch (moveVariants[parsedValue - 1])
             {
-                case "1":
+                case "Атака":
                     GetPlayerAtackSkill(currentBoss);
                     answerCorrect = true;
                     break;
 
-                case "2":
+                case "Защита":
                     WriteLineAfterClear($"В следующем ходу вы получите вдвое меньше урона.");
                     player.Protected = true;
                     answerCorrect = true;
                     break;
 
-                case "3":
+                case "Лечение":
                     int amount = 100;
                     player.Heal(amount);
                     WriteLineAfterClear($"Вы вылечили себя на {amount} ОЗ.");
@@ -163,24 +158,32 @@ public class BossBattle()
     private void BossTurn(Character currentBoss)
     {
         currentBoss.Protected = false;
-        WriteLine($"Сейчас ход босса.");
-        int bossChoice = random.Next(4);
-
-        switch (bossChoice)
+        Dictionary<int, string> moveVariants = new Dictionary<int, string>()
         {
-            case 0:
+            { 0, "Атака" }, { 1, "Защита" }, { 2, "Лечение" }
+        };
+
+        WriteLine($"Сейчас ход босса.");
+        int bossChoice = random.Next(moveVariants.Count + 1);
+
+        switch (moveVariants[bossChoice])
+        {
+            case "Атака":
                 Skill currentSkill = currentBoss.Skills[random.Next(currentBoss.Skills.Length)];
                 WriteLine($"{currentBoss.Name} использует способность {currentSkill.Title}.");
                 currentBoss.DealDamage(player, currentSkill);
                 break;
-            case 1:
+
+            case "Защита":
                 WriteLine($"{currentBoss.Name} вылечил себя.");
                 currentBoss.Heal(100);
                 break;
-            case 2:
+
+            case "Лечение":
                 WriteLine($"{currentBoss.Name} встаёт в защитную стойку.");
                 currentBoss.Protected = true;
                 break;
+
             default:
                 string[] answers =
                 {
@@ -204,10 +207,10 @@ public class BossBattle()
         do
         {
             Clear();
-            WriteLine("Выберите атаку:" +
-            $"\n1. {player.Skills[0].ShowSkillInfo()}" +
-            $"\n2. {player.Skills[1].ShowSkillInfo()}" +
-            $"\n3. {player.Skills[2].ShowSkillInfo()}");
+            WriteLine("Выберите атаку:");
+
+            for (int i = 0; i < player.Skills.Length; i++)
+                WriteLine($"{i + 1}. {player.Skills[0].ShowSkillInfo()}");
 
             if (int.TryParse(GetUserInput(), out int value))
                 if (value > 0 && value <= 3)
@@ -222,7 +225,6 @@ public class BossBattle()
                     WriteLine("Ответ за пределами допустимых значений. Попробуйте снова.");
                     ReadKeyMessage();
                 }
-
             else
                 InvalidCommandMessage();
 
@@ -233,37 +235,34 @@ public class BossBattle()
 public class Character
 {
     public string Name { get; private set; }
-    public bool Eliminated { get; set; }
     public int Health { get; private set; } = 1000;
     public bool Protected { get; set; }
     public Skill[] Skills { get; private set; }
+    public bool Eliminated
+    {
+        get
+        {
+            return Health <= 0;
+        }
+    }
+
 
     public Character(string name, int health, Skill secondSkill, Skill thirdSkill)
     {
         Name = name;
         Health = health;
-        Eliminated = false;
         Skills = new Skill[3] { new Skill("Слабая атака", 35, 10, 25), secondSkill, thirdSkill };
     }
 
     public void DealDamage(Character other, Skill skill)
     {
-        other.TakeDamage(Name, skill.CalculateDamage());
+        other.TakeDamage(other, skill.CalculateDamage());
     }
 
-    public void TakeDamage(string name, int damage)
+    public void TakeDamage(Character other, int damage)
     {
         Health -= damage;
-        WriteLine($"{Name} получает {damage} урона от персонажа {name}.");
-        Eliminated = CheckLiveStatus();
-    }
-
-    private bool CheckLiveStatus()
-    {
-        if (Health <= 0)
-            return true;
-        else
-            return false;
+        WriteLine($"{Name} получает {damage} урона от персонажа {other.Name}.");
     }
 
     public void Heal(int amount) => Health += amount;
@@ -282,6 +281,7 @@ public class Skill
     public int MinDamage { get; private set; }
     public int MaxDamage { get; private set; }
     public int CritChance { get; private set; }
+    private const int critMultiplier = 2;
 
     public Skill(string title, int averageDamage, int damageRange, int critChance)
     {
@@ -302,7 +302,7 @@ public class Skill
         int damage = random.Next(MinDamage, MaxDamage + 1);
 
         if (random.Next(maxCritValue + 1) > maxCritValue - CritChance)
-            return damage * 2;
+            return damage * critMultiplier;
         else
             return damage;
     }
@@ -310,8 +310,10 @@ public class Skill
 
 namespace MyTools
 {
-    public static class InputOutputManager
+    public static class UserInputHandler
     {
+        public static bool ExitRequested { get; private set; }
+        public static bool GameStarted { get; private set; }
         public static string GetUserInput()
         {
             Write("> ");
@@ -321,8 +323,8 @@ namespace MyTools
             {
                 case GameManager.exitCommand:
                     WriteLine("Программа завершает свою работу...");
-                    GameManager.ExitRequested = true;
-                    GameManager.GameStarted = false;
+                    ExitRequested = true;
+                    ChangeGameStatus(false);
                     ReadKeyMessage();
                     break;
 
@@ -331,8 +333,8 @@ namespace MyTools
                     break;
 
                 case GameManager.returnCommand:
-                    if (GameManager.GameStarted == true)
-                        GameManager.GameStarted = false;
+                    if (GameStarted == true)
+                        ChangeGameStatus(false);
                     else
                         ReturnCommandExeption();
                     break;
@@ -340,6 +342,9 @@ namespace MyTools
 
             return userInput;
         }
+
+        public static void ChangeGameStatus(bool status)
+            => GameStarted = status;
 
         public static void ReadKeyMessage()
         {
